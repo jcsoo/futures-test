@@ -19,6 +19,7 @@ use futures_mio::{Loop, LoopHandle, UdpSocket};
 use std::net::SocketAddr;
 use std::io;
 
+#[derive(Debug)]
 pub struct Resolver {
     socket: UdpSocket,
     addr: SocketAddr,
@@ -36,7 +37,7 @@ impl Resolver {
         }).boxed()
     }
 
-    pub fn resolve(self, host: &str) -> BoxFuture<(Message, Resolver), (io::Error, UdpSocket)> {
+    pub fn resolve(self, host: &str) -> BoxFuture<(Message, Resolver), (io::Error, Resolver)> {
         let buf = dns_query::build_query(1234, host);
         let addr = self.addr;        
         
@@ -58,8 +59,11 @@ impl Resolver {
 
                 let r = Resolver { socket: a, addr: addr};
                 Ok((dns_query::parse_response(&mut buf), r))
+            })
+            .map_err(move |(e, a)| {
+                let r = Resolver { socket: a, addr: addr};
+                (e, r)
             }).boxed()
-            //.map_err(|(e, _)| e).boxed()
        }
 }
 
