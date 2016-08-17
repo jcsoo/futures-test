@@ -36,9 +36,9 @@ impl Resolver {
         }).boxed()
     }
 
-    pub fn resolve(self, host: &str) -> BoxFuture<Message, (io::Error, UdpSocket)> {
+    pub fn resolve(self, host: &str) -> BoxFuture<(Message, Resolver), (io::Error, UdpSocket)> {
         let buf = dns_query::build_query(1234, host);
-        let addr = self.addr;
+        let addr = self.addr;        
         
         self.socket
             .into_future()
@@ -49,20 +49,32 @@ impl Resolver {
                 a.send_to(&buf, &addr).unwrap();
                 a.into_future() // Future<Item = (Option<Ready>, UdpSocket)>
             })
-            .and_then(|(ar,a)| {
+            .and_then(move |(ar,a)| {
                 let ar = ar.unwrap(); // Ready
                 assert!(ar.is_read());
 
                 let mut buf = [0; 512];
                 let (_size, _addr) = a.recv_from(&mut buf).unwrap();
 
-                Ok(dns_query::parse_response(&mut buf))
+                let r = Resolver { socket: a, addr: addr};
+                Ok((dns_query::parse_response(&mut buf), r))
             }).boxed()
             //.map_err(|(e, _)| e).boxed()
        }
 }
 
 fn main() {
+    let addr: SocketAddr = "8.8.8.8:53".parse().unwrap();
+    let host = "google.com";
+
+    let mut lp = futures_mio::Loop::new().unwrap();
+    let h = lp.handle();
+    let r = lp.run(Resolver::new(h, addr)).unwrap();
+    let (msg, _) = lp.run(r.resolve(host)).unwrap();
+    println!("msg: {:?}", msg);
+}
+
+fn main_basic2() {
     let addr: SocketAddr = "8.8.8.8:53".parse().unwrap();
     let buf = dns_query::build_query(1234, "google.com");
 
