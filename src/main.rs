@@ -78,41 +78,6 @@ fn main() {
     println!("msg: {:?}", msg);
 }
 
-fn main_basic2() {
-    let addr: SocketAddr = "8.8.8.8:53".parse().unwrap();
-    let buf = dns_query::build_query(1234, "google.com");
-
-
-    let mut lp = futures_mio::Loop::new().unwrap();
-    let local_addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
-    let socket_bind = lp.handle().udp_bind(&local_addr); // Future<Item = UdpSocket, Error = Error>
-
-    let done = socket_bind.and_then(move |socket| {
-        //let socket_future = socket.into_future(); // Future<Item = (Option<Ready>, UdpSocket)>, Error = (Error, UdpSocket)>
-        socket
-            .into_future()
-            .and_then(move |(ar, a)| {
-                let ar = ar.unwrap(); // Ready
-                assert!(ar.is_write());
-
-                a.send_to(&buf, &addr).unwrap();
-                a.into_future() // Future<Item = (Option<Ready>, UdpSocket)>
-            })
-            .and_then(|(ar,a)| {
-                let ar = ar.unwrap(); // Ready
-                assert!(ar.is_read());
-
-                let mut buf = [0; 512];
-                let (_size, _addr) = a.recv_from(&mut buf).unwrap();
-
-                Ok(dns_query::parse_response(&mut buf))
-            })
-            .map_err(|(e, _)| e)
-    });
-    let msg = lp.run(done).unwrap(); // (Option<Ready>, UdpSocket)
-    println!("msg: {:?}", msg);
-}
-
 fn main_basic() {
     let addr: SocketAddr = "8.8.8.8:53".parse().unwrap();
     let buf = dns_query::build_query(1234, "google.com");
