@@ -7,5 +7,4 @@ authors = ["Jonathan Soo <jcsoo@agora.com>"]
 futures = { git = "https://github.com/alexcrichton/futures-rs" }
 futures-io = { git = "https://github.com/alexcrichton/futures-rs" }
 futures-mio = { git = "https://github.com/alexcrichton/futures-rs" }
-futures-tls = { git = "https://github.com/alexcrichton/futures-rs" }
 trust-dns = "0.7.3"
