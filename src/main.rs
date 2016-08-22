@@ -61,46 +61,35 @@ impl Future for Resolver {
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        println!("poll::top");
-        println!("  poll self.receiver");
-        match self.receiver.poll() {
-            Poll::Ok(Some(req)) => self.queue.push_back(req),            
-            _ => {},
+        while let Poll::Ok(Some(req)) = self.receiver.poll() {
+            self.queue.push_back(req)            
         }
-        println!("  pop queue");
         while let Some((mut req, complete)) = self.queue.pop_front() {
-            println!("   poll_write");
             if let Poll::Ok(_) = self.socket.poll_write() {
-                println!("   send_message: {:?}", req);
                 self.buffer.clear();
                 let id = next_request_id();
                 req.id(id);
                 dns_query::encode_message(&mut self.buffer, &req);
                 let n = try_nb!(self.socket.send_to(&self.buffer, &self.remote));
                 self.requests.insert(id, complete);
-                println!("   {} bytes sent", n);
             } else {
-                println!("   unsend_message: {:?}", req);
                 self.queue.push_front((req, complete));
             }
         }
 
-        println!("  wait for data");
         while let Poll::Ok(_) = self.socket.poll_read() {
             let mut buf = [0u8; 512];
-            println!("  reading data");
-
-            let _  = try_nb!(self.socket.recv_from(&mut buf));
+            let (n, addr)  = try_nb!(self.socket.recv_from(&mut buf));
+            if addr != self.remote {
+                println!("Discarding message from unexpected address: want {:?}, got {:?}", self.remote, addr);
+            }
             let msg = dns_query::decode_message(&mut buf);
             if let Some(complete) = self.requests.remove(&msg.get_id()) {
-                println!("  message: {:?}", msg);
                 complete.complete(msg)
             } else {
-                println!("  unexpected message: {:?}", msg);
             }
                         
         }
-        println!("poll::bottom\n");
         Poll::NotReady        
     }
 }
@@ -149,17 +138,12 @@ fn main() {
     let p2 = r.query(q);
 
     p1.map(|m| {
-        println!("c1 got message:{:?}", m);
+        println!("c1 got message:{:?}\n", m);
     }).forget();
 
     p2.map(|m| {
-        println!("c2 got message:{:?}", m);
+        println!("c2 got message:{:?}\n", m);
     }).forget();
     
-
     r.join();
-    //let lp = Loop::new().unwrap();
-
-    //    let v = lp.run(done).unwrap();
-    //println!("v: {:?}", v);
 }
